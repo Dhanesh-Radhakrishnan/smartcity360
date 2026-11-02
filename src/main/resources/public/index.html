@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmartCity360</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+        h1 { margin-bottom: .25rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .card { border: 1px solid #ccc; border-radius: 8px; padding: 1rem; }
+        button { padding: .5rem 1rem; cursor: pointer; }
+        pre { background: #111; color: #0f0; padding: 1rem; border-radius: 8px; min-height: 120px; overflow: auto; }
+    </style>
+</head>
+<body>
+<h1>SmartCity360</h1>
+<p id="status">Checking server...</p>
+
+<div class="grid">
+    <div class="card"><h3>A. Secure Streams</h3><p>Decorator</p><button onclick="callApi('GET','/api/a/secure-stream')">Run</button></div>
+    <div class="card"><h3>B. Smart Zones</h3><p>Composite</p><button onclick="callApi('GET','/api/b/zones')">Run</button></div>
+    <div class="card"><h3>C. Complaints</h3><p>Chain of Responsibility</p><button onclick="callApi('POST','/api/c/complaint')">Run</button></div>
+    <div class="card"><h3>D. Streetlights</h3><p>Flyweight</p><button onclick="callApi('GET','/api/d/streetlights')">Run</button></div>
+    <div class="card"><h3>E. City Policies</h3><p>Interpreter</p><button onclick="callApi('POST','/api/e/policy')">Run</button></div>
+</div>
+
+<h3>Output</h3>
+<pre id="output">Click Run on any part.</pre>
+
+<script src="app.js"></script>
+</body>
+</html>
