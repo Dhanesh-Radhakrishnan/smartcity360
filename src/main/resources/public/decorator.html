@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>SmartCity360 - Secure Stream</title></head>
+<body style="font-family:sans-serif;max-width:700px;margin:30px auto">
+<h2>Energy Meter Secure Stream</h2>
+<textarea id="data" rows="4" style="width:100%">{"meterId":"EM-1001","kwh":482.7}</textarea><br>
+<label><input type="checkbox" id="encrypt" checked> Encryption</label>
+<label><input type="checkbox" id="compress" checked> Compression</label>
+<label><input type="checkbox" id="auth" checked> Authentication</label><br>
+Token: <input id="token" value="meter-secret-token">
+<button onclick="send()">Send</button>
+<pre id="out"></pre>
+<script>
+    async function send() {
+        const q = new URLSearchParams({
+            encrypt: encrypt.checked, compress: compress.checked,
+            auth: auth.checked, token: token.value
+        });
+        const r = await fetch('/api/stream?' + q, { method: 'POST', body: data.value });
+        out.textContent = JSON.stringify(await r.json(), null, 2);
+    }
+</script>
+</body>
+</html>

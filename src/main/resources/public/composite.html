@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmartCity360 - Zones</title>
+    <style>
+        body { font-family: sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+        input { padding: 8px; width: 240px; }
+        button { padding: 8px 14px; margin-right: 6px; cursor: pointer; }
+        pre { background: #111; color: #0f0; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+        .hint { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+<a href="/">&larr; Back to dashboard</a>
+<h1>Smart zones <small style="font-size:14px;color:#888">Composite pattern</small></h1>
+<p class="hint">Try: Kandy, Peradeniya, University Rd, Library, Hospital</p>
+
+<input id="zone" placeholder="Zone name" value="Kandy">
+<button onclick="run('GET', 'report')">Report usage</button>
+<button onclick="run('POST', 'shutdown')">Shutdown power</button>
+<button onclick="run('POST', 'restore')">Restore power</button>
+
+<pre id="out">Output appears here...</pre>
+
+<script>
+    async function run(method, action) {
+        const name = document.getElementById('zone').value.trim();
+        const res = await fetch('/api/composite/' + action + '/' + encodeURIComponent(name), { method });
+        document.getElementById('out').textContent = await res.text();
+    }
+</script>
+</body>
+</html>
