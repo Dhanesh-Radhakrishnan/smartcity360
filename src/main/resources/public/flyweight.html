@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SmartCity360 - Flyweight</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; padding: 0 16px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+        #stats { background: #f4f7fb; padding: 12px; margin-top: 12px; }
+    </style>
+</head>
+<body>
+<a href="/">&larr; Back to dashboard</a>
+<h1>Part D: Flyweight - Smart Streetlights</h1>
+
+Lights: <input id="count" type="number" value="50000">
+<button onclick="generate()">Generate</button>
+
+<div id="stats">Click Generate.</div>
+
+<table>
+    <thead>
+    <tr><th>ID</th><th>Street</th><th>Location</th><th>Shared type</th><th>On?</th><th>Power</th><th></th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+</table>
+
+<script>
+    async function generate() {
+        const count = document.getElementById('count').value;
+        const res = await fetch('/api/flyweight/generate?count=' + count, { method: 'POST' });
+        const s = await res.json();
+        document.getElementById('stats').innerHTML =
+            'Street lights: <b>' + s.totalLights + '</b> | LightType objects in memory: <b>' + s.typeObjects + '</b>';
+        loadLights();
+    }
+
+    async function loadLights() {
+        const res = await fetch('/api/flyweight/lights');
+        const lights = await res.json();
+        let html = '';
+        for (const l of lights) {
+            html += '<tr><td>' + l.id + '</td><td>' + l.street + '</td>' +
+                '<td>' + l.lat.toFixed(4) + ', ' + l.lng.toFixed(4) + '</td><td>' + l.type.model + '</td>' +
+                '<td>' + (l.on ? 'ON' : 'off') + '</td><td>' + l.powerNow + ' W</td>' +
+                '<td><button onclick="toggle(' + l.id + ')">Toggle</button></td></tr>';
+        }
+        document.getElementById('rows').innerHTML = html;
+    }
+
+    async function toggle(id) {
+        await fetch('/api/flyweight/toggle/' + id, { method: 'POST' });
+        loadLights();
+    }
+</script>
+</body>
+</html>
