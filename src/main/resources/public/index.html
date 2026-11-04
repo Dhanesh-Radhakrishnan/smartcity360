@@ -4,47 +4,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SmartCity360</title>
-    <style>
-        body { font-family: sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-        a.card { display: block; padding: 18px; border: 1px solid #ccc; border-radius: 10px;
-            text-decoration: none; color: inherit; }
-        a.card:hover { border-color: #333; background: #f6f6f6; }
-        a.card h3 { margin: 0 0 6px; }
-        a.card p { margin: 0; color: #555; font-size: 14px; }
-        .tag { font-size: 12px; color: #888; }
-    </style>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<h1>SmartCity360</h1>
-<p>Smart city management platform. Pick a module:</p>
+<header class="top">
+    <div class="wrap">
+        <a class="wordmark" href="/">SmartCity<b>360</b></a>
+        <span class="course">JIAT / OODP II</span>
+    </div>
+</header>
 
-<div class="grid">
-    <a class="card" href="/decorator.html">
-        <span class="tag">Part A</span>
-        <h3>Data stream security</h3>
-        <p>Decorator pattern</p>
-    </a>
-    <a class="card" href="/composite.html">
-        <span class="tag">Part B</span>
-        <h3>Smart zones</h3>
-        <p>Composite pattern</p>
-    </a>
-    <a class="card" href="/chain.html">
-        <span class="tag">Part C</span>
-        <h3>Citizen complaints</h3>
-        <p>Chain of Responsibility pattern</p>
-    </a>
-    <a class="card" href="/flyweight.html">
-        <span class="tag">Part D</span>
-        <h3>Smart street lights</h3>
-        <p>Flyweight pattern</p>
-    </a>
-    <a class="card" href="/interpreter.html">
-        <span class="tag">Part E</span>
-        <h3>City policies (DSL)</h3>
-        <p>Interpreter pattern</p>
-    </a>
-</div>
+<main class="wrap">
+    <div class="pagehead" style="padding-top:44px">
+        <p class="kicker">UrbanTech Solutions</p>
+        <h1 style="font-size:2.6rem">SmartCity360</h1>
+        <p class="lead">City operations console. Each module below applies one design pattern to one city problem.</p>
+    </div>
+
+    <p class="section-label">Modules</p>
+    <ol class="index">
+        <li><a href="/decorator.html">
+            <span class="part">A</span>
+            <span><strong>Data stream security</strong>
+                <span class="desc">Encryption, compression and authentication layers on energy meter streams.</span></span>
+            <span class="pat">Decorator</span></a></li>
+        <li><a href="/composite.html">
+            <span class="part">B</span>
+            <span><strong>Smart zones</strong>
+                <span class="desc">Report usage or shut down power at any level, from city to building.</span></span>
+            <span class="pat">Composite</span></a></li>
+        <li><a href="/chain.html">
+            <span class="part">C</span>
+            <span><strong>Citizen complaints</strong>
+                <span class="desc">Escalation from local staff to supervisor to city manager, by severity.</span></span>
+            <span class="pat">Chain of Responsibility</span></a></li>
+        <li><a href="/flyweight.html">
+            <span class="part">D</span>
+            <span><strong>Smart street lights</strong>
+                <span class="desc">Tens of thousands of lights sharing one copy of their type data.</span></span>
+            <span class="pat">Flyweight</span></a></li>
+        <li><a href="/interpreter.html">
+            <span class="part">E</span>
+            <span><strong>City policies</strong>
+                <span class="desc">Noise and parking rules written as text, parsed and checked live.</span></span>
+            <span class="pat">Interpreter</span></a></li>
+    </ol>
+</main>
+
+<footer class="wrap">Java 17 · Javalin · localhost:7070</footer>
 </body>
 </html>

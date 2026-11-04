@@ -3,74 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SmartCity360 – Complaint Escalation</title>
-    <style>
-        :root {
-            --bg: #f3f5f4; --card: #ffffff; --ink: #1d2b27; --muted: #5d6d68;
-            --line: #d5dedb; --accent: #0d6b5c; --low: #2e7d4f; --med: #b7791f;
-            --high: #c05621; --crit: #b42318;
-        }
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
-        header { background: var(--accent); color: #fff; padding: 20px 24px; }
-        header a { color: #fff; font-size: .9rem; opacity: .9; }
-        header h1 { margin: 8px 0 0; font-size: 1.4rem; }
-        header p { margin: 4px 0 0; opacity: .85; font-size: .95rem; }
-        main { max-width: 1000px; margin: 24px auto; padding: 0 16px; display: grid; gap: 24px; grid-template-columns: 340px 1fr; }
-        @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
-        section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
-        h2 { margin: 0 0 14px; font-size: 1.1rem; }
-        label { display: block; font-size: .9rem; margin: 12px 0 4px; color: var(--muted); }
-        input, textarea, select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
-        textarea { min-height: 90px; resize: vertical; }
-        :focus-visible { outline: 3px solid #7ac1b4; outline-offset: 1px; }
-        button { margin-top: 16px; width: 100%; padding: 10px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
-        button:hover { background: #0a5649; }
-        .msg { margin-top: 10px; font-size: .9rem; color: var(--crit); min-height: 1.2em; }
-        .empty { color: var(--muted); }
-        .item { border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-bottom: 14px; }
-        .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .badge { font-size: .8rem; font-weight: 600; padding: 2px 10px; border-radius: 99px; color: #fff; }
-        .LOW { background: var(--low); } .MEDIUM { background: var(--med); }
-        .HIGH { background: var(--high); } .CRITICAL { background: var(--crit); }
-        .meta { color: var(--muted); font-size: .88rem; margin: 6px 0; }
-        .status { font-weight: 600; }
-        ol.trail { margin: 10px 0 0; padding-left: 20px; font-size: .86rem; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
-        ol.trail li { margin: 3px 0; }
-    </style>
+    <title>SmartCity360 - Complaint Escalation</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<header>
-    <a href="index.html">&larr; Back to dashboard</a>
-    <h1>Complaint Escalation</h1>
-    <p>Chain of Responsibility: Local Staff, then Supervisor, then City Manager</p>
+<header class="top">
+    <div class="wrap">
+        <a class="wordmark" href="/">SmartCity<b>360</b></a>
+        <span class="course">JIAT / OODP II</span>
+    </div>
 </header>
 
-<main>
-    <section>
-        <h2>Submit a complaint</h2>
-        <label for="name">Your name</label>
-        <input id="name" placeholder="e.g. Nimal Perera">
+<main class="wrap">
+    <a class="back" href="/">&larr; Back to dashboard</a>
+    <div class="pagehead">
+        <p class="kicker">Part C &middot; Chain of Responsibility</p>
+        <h1>Complaint escalation</h1>
+        <p class="lead">Local staff, then supervisor, then city manager. The first handler able to deal with it takes it.</p>
+    </div>
 
-        <label for="desc">What happened?</label>
-        <textarea id="desc" placeholder="e.g. Street light is flickering on Peradeniya Road"></textarea>
+    <div class="split">
+        <section class="panel">
+            <h2>Submit a complaint</h2>
+            <label for="name">Your name</label>
+            <input id="name" placeholder="e.g. Nimal Perera">
 
-        <label for="sev">Severity</label>
-        <select id="sev">
-            <option value="LOW">Low – minor issue</option>
-            <option value="MEDIUM">Medium – needs attention</option>
-            <option value="HIGH">High – serious problem</option>
-            <option value="CRITICAL">Critical – emergency</option>
-        </select>
+            <label for="desc">What happened?</label>
+            <textarea id="desc" placeholder="e.g. Street light is flickering on Peradeniya Road"></textarea>
 
-        <button id="send">Submit complaint</button>
-        <div class="msg" id="msg" role="alert"></div>
-    </section>
+            <label for="sev">Severity</label>
+            <select id="sev">
+                <option value="LOW">Low: minor issue</option>
+                <option value="MEDIUM">Medium: needs attention</option>
+                <option value="HIGH">High: serious problem</option>
+                <option value="CRITICAL">Critical: emergency</option>
+            </select>
 
-    <section>
-        <h2>Complaints and escalation trail</h2>
-        <div id="list"><p class="empty">No complaints yet. Submit one to see how it escalates.</p></div>
-    </section>
+            <button class="block" id="send">Submit complaint</button>
+            <div class="msg bad" id="msg" role="alert"></div>
+        </section>
+
+        <section class="panel">
+            <h2>Complaints and escalation trail</h2>
+            <div id="list"><p class="empty">No complaints yet. Submit one to see how it escalates.</p></div>
+        </section>
+    </div>
 </main>
 
 <script>
@@ -93,13 +70,13 @@
         }
         items.forEach(c => {
             const box = el("div", "item");
-            const top = el("div", "top");
-            top.appendChild(el("strong", "", "#" + c.id + " – " + c.citizenName));
+            const top = el("div", "top2");
+            top.appendChild(el("strong", "", "#" + c.id + " \u2013 " + c.citizenName));
             top.appendChild(el("span", "badge " + c.severity, c.severity));
             box.appendChild(top);
             box.appendChild(el("div", "", c.description));
             const meta = el("div", "meta");
-            meta.appendChild(el("span", "status", c.status));
+            meta.appendChild(el("span", "status " + c.status, c.status));
             meta.appendChild(document.createTextNode(c.resolvedBy ? " by " + c.resolvedBy : ""));
             box.appendChild(meta);
             const ol = el("ol", "trail");

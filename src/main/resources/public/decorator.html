@@ -1,15 +1,54 @@
 <!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>SmartCity360 - Secure Stream</title></head>
-<body style="font-family:sans-serif;max-width:700px;margin:30px auto">
-<h2>Energy Meter Secure Stream</h2>
-<textarea id="data" rows="4" style="width:100%">{"meterId":"EM-1001","kwh":482.7}</textarea><br>
-<label><input type="checkbox" id="encrypt" checked> Encryption</label>
-<label><input type="checkbox" id="compress" checked> Compression</label>
-<label><input type="checkbox" id="auth" checked> Authentication</label><br>
-Token: <input id="token" value="meter-secret-token">
-<button onclick="send()">Send</button>
-<pre id="out"></pre>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmartCity360 - Secure Stream</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+    <div class="wrap">
+        <a class="wordmark" href="/">SmartCity<b>360</b></a>
+        <span class="course">JIAT / OODP II</span>
+    </div>
+</header>
+
+<main class="wrap">
+    <a class="back" href="/">&larr; Back to dashboard</a>
+    <div class="pagehead">
+        <p class="kicker">Part A &middot; Decorator</p>
+        <h1>Energy meter secure stream</h1>
+        <p class="lead">Switch layers on and off. Each one wraps the stream without changing the meter code.</p>
+    </div>
+
+    <div class="split">
+        <section class="panel">
+            <h2>Reading</h2>
+            <label for="data">Meter reading (JSON)</label>
+            <textarea id="data" class="mono" rows="5">{"meterId":"EM-1001","kwh":482.7}</textarea>
+
+            <label>Layers</label>
+            <div class="checks">
+                <label class="check"><input type="checkbox" id="encrypt" checked> Encryption</label>
+                <label class="check"><input type="checkbox" id="compress" checked> Compression</label>
+                <label class="check"><input type="checkbox" id="auth" checked> Authentication</label>
+            </div>
+
+            <label for="token">Meter token</label>
+            <input id="token" class="mono" value="meter-secret-token">
+
+            <button class="block" onclick="send()">Send through stream</button>
+        </section>
+
+        <section class="panel">
+            <h2>Result</h2>
+            <pre class="out" id="out">Output appears here...</pre>
+            <p class="hint">Wrapping order: encryption (inner), compression, authentication (outer).</p>
+        </section>
+    </div>
+</main>
+
 <script>
     async function send() {
         const q = new URLSearchParams({

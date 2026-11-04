@@ -2,44 +2,54 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SmartCity360 – Interpreter</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        section { border: 1px solid #d1d5db; border-radius: 10px; padding: 1rem; margin: 1rem 0; }
-        table { width: 100%; border-collapse: collapse; }
-        td, th { text-align: left; padding: .4rem; border-bottom: 1px solid #e5e7eb; }
-        input { padding: .4rem; margin: .2rem 0; width: 100%; box-sizing: border-box; }
-        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
-        button { padding: .5rem 1rem; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
-        .bad { color: #dc2626; font-weight: 600; } .ok { color: #16a34a; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SmartCity360 - Interpreter</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<a href="index.html">← Back to dashboard</a>
-<h1>Part E – City Policy Interpreter</h1>
-<p>A rule that evaluates to <b>true</b> is a <b>violation</b>. Format: <code>variable operator value</code> joined by AND / OR.</p>
-
-<section>
-    <h3>Rules</h3>
-    <table id="rules"></table>
-    <h4>Add / update a rule</h4>
-    <input id="rname" placeholder="Rule name, e.g. NightNoise">
-    <input id="rtext" placeholder="zone == HOME AND hour >= 22 AND noise_db > 60">
-    <button onclick="saveRule()">Save rule</button>
-    <p id="msg"></p>
-</section>
-
-<section>
-    <h3>Check an incident</h3>
-    <div class="grid">
-        <label>zone <input id="zone" value="HOME"></label>
-        <label>hour <input id="hour" type="number" value="23"></label>
-        <label>noise_db <input id="noise_db" type="number" value="65"></label>
-        <label>parked_minutes <input id="parked_minutes" type="number" value="0"></label>
+<header class="top">
+    <div class="wrap">
+        <a class="wordmark" href="/">SmartCity<b>360</b></a>
+        <span class="course">JIAT / OODP II</span>
     </div>
-    <p><button onclick="runCheck()">Evaluate</button></p>
-    <table id="results"></table>
-</section>
+</header>
+
+<main class="wrap">
+    <a class="back" href="/">&larr; Back to dashboard</a>
+    <div class="pagehead">
+        <p class="kicker">Part E &middot; Interpreter</p>
+        <h1>City policy interpreter</h1>
+        <p class="lead">A rule that evaluates to <b>true</b> is a <b>violation</b>.
+            Format: <code>variable operator value</code>, joined by AND / OR.</p>
+    </div>
+
+    <div class="stack">
+        <section class="panel">
+            <h2>Rules</h2>
+            <div class="scroll"><table id="rules"></table></div>
+
+            <h3>Add or update a rule</h3>
+            <label for="rname">Rule name</label>
+            <input id="rname" placeholder="e.g. NightNoise">
+            <label for="rtext">Rule text</label>
+            <input id="rtext" class="mono" placeholder="zone == HOME AND hour >= 22 AND noise_db > 60">
+            <button class="block" onclick="saveRule()">Save rule</button>
+            <p id="msg" class="msg"></p>
+        </section>
+
+        <section class="panel">
+            <h2>Check an incident</h2>
+            <div class="fields">
+                <label>zone <input id="zone" value="HOME"></label>
+                <label>hour <input id="hour" type="number" value="23"></label>
+                <label>noise_db <input id="noise_db" type="number" value="65"></label>
+                <label>parked_minutes <input id="parked_minutes" type="number" value="0"></label>
+            </div>
+            <button class="block" onclick="runCheck()">Evaluate</button>
+            <div class="scroll" style="margin-top:16px"><table id="results"></table></div>
+        </section>
+    </div>
+</main>
 
 <script>
     const API = '/api/interpreter';
@@ -50,13 +60,13 @@
         const rules = await (await fetch(API + '/rules')).json();
         document.getElementById('rules').innerHTML = '<tr><th>Name</th><th>Rule</th><th></th></tr>' +
             rules.map(r => `<tr><td>${esc(r.name)}</td><td><code>${esc(r.text)}</code></td>
-      <td><button data-n="${esc(r.name)}" onclick="del(this.dataset.n)">Delete</button></td></tr>`).join('');
+      <td><button class="danger sm" data-n="${esc(r.name)}" onclick="del(this.dataset.n)">Delete</button></td></tr>`).join('');
     }
 
     async function saveRule() {
         const res = await post(API + '/rules', { name: rname.value, text: rtext.value });
         const data = await res.json();
-        msg.className = res.ok ? 'ok' : 'bad';
+        msg.className = 'msg ' + (res.ok ? 'ok' : 'bad');
         msg.textContent = res.ok ? 'Rule saved.' : 'Error: ' + data.error;
         if (res.ok) loadRules();
     }
@@ -70,8 +80,9 @@
         const context = { zone: zone.value, hour: Number(hour.value),
             noise_db: Number(noise_db.value), parked_minutes: Number(parked_minutes.value) };
         const rows = await (await post(API + '/evaluate', { context })).json();
-        document.getElementById('results').innerHTML = rows.map(r =>
-            `<tr><td>${esc(r.name)}</td><td class="${r.violated ? 'bad' : 'ok'}">
+        document.getElementById('results').innerHTML =
+            '<tr><th>Rule</th><th>Result</th></tr>' + rows.map(r =>
+                `<tr><td>${esc(r.name)}</td><td class="${r.violated || r.error ? 'bad' : 'ok'}">
      ${r.error ? esc(r.error) : r.violated ? 'VIOLATION' : 'OK'}</td></tr>`).join('');
     }
     loadRules();
