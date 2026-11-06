@@ -5,6 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SmartCity360 - Zones</title>
     <link rel="stylesheet" href="/style.css">
+    <style>
+        /* Page-only styles (shared style.css stays untouched) */
+        .banner { padding: 12px 16px; border: 1px solid currentColor; border-radius: 3px; font-weight: 600; margin-bottom: 18px; }
+        .banner small { display: block; font-weight: 400; color: var(--muted); }
+        .banner.good { color: var(--ok); } .banner.warn { color: var(--warn); } .banner.bad { color: var(--danger); }
+
+        .tree ul { list-style: none; margin: 0; padding: 0 0 0 22px; border-left: 2px solid var(--line); }
+        .tree > ul { padding-left: 0; border-left: 0; }
+        .tree li { margin: 6px 0; }
+        .tree details > summary { list-style: none; cursor: pointer; }
+        .tree details > summary::-webkit-details-marker { display: none; }
+        .caret { display: inline-block; width: 14px; color: var(--muted); transition: transform .15s; }
+        details[open] > summary .caret { transform: rotate(90deg); }
+        .caret.none { visibility: hidden; }
+
+        .zrow { display: grid; grid-template-columns: 14px auto minmax(90px, 1fr) 90px 82px; gap: 10px; align-items: center;
+            padding: 8px 10px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+        .zrow:hover { background: var(--tint); }
+        .zrow.target { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand) inset; }
+        .zname { font-weight: 600; cursor: pointer; }
+        .zname:hover { color: var(--brand); text-decoration: underline; }
+        .lvl { font: 600 10.5px var(--mono); letter-spacing: .06em; padding: 2px 7px; border: 1px solid var(--line);
+            border-radius: 2px; color: var(--muted); }
+        .bar { height: 6px; background: var(--inset); border-radius: 3px; overflow: hidden; }
+        .bar i { display: block; height: 100%; background: var(--brand); }
+        .kwh { font: 13px var(--mono); text-align: right; }
+        .pill { font: 700 11px var(--mono); letter-spacing: .05em; text-align: center; padding: 3px 0; border: 1px solid currentColor; border-radius: 10px; }
+        .pill.ON { color: var(--ok); } .pill.OFF { color: var(--danger); } .pill.PARTIAL { color: var(--warn); }
+        .zrow.off .zname, .zrow.off .kwh { color: var(--muted); }
+
+        @media (max-width: 640px) {
+            .zrow { grid-template-columns: 14px 1fr auto; }
+            .zrow .bar, .zrow .lvl { display: none; }
+        }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+        .placeholder { color: var(--muted); }
+    </style>
 </head>
 <body>
 <header class="top">
@@ -25,37 +62,148 @@
     <div class="stack">
         <section class="panel">
             <h2>Command</h2>
-            <label for="zone">Zone name</label>
+            <label for="zone">Selected zone</label>
             <div class="row">
                 <input id="zone" placeholder="Zone name" value="Kandy">
-                <button onclick="run('GET', 'report')">Report usage</button>
-                <button class="danger" onclick="run('POST', 'shutdown')">Shut down power</button>
-                <button class="ghost" onclick="run('POST', 'restore')">Restore power</button>
+                <button id="b-report" onclick="run('GET', 'report')">Report usage</button>
+                <button id="b-shutdown" class="danger" onclick="run('POST', 'shutdown')">Shut down power</button>
+                <button id="b-restore" class="ghost" onclick="run('POST', 'restore')">Restore power</button>
             </div>
-            <p class="hint">Try:
-                <button class="link" onclick="pick('Kandy')">Kandy</button>,
-                <button class="link" onclick="pick('Peradeniya')">Peradeniya</button>,
-                <button class="link" onclick="pick('University Rd')">University Rd</button>,
-                <button class="link" onclick="pick('Library')">Library</button>,
+            <div class="chips">
+                <span class="hint" style="margin:0">Quick pick:</span>
+                <button class="link" onclick="pick('Kandy')">Kandy</button>
+                <button class="link" onclick="pick('Peradeniya')">Peradeniya</button>
+                <button class="link" onclick="pick('University Rd')">University Rd</button>
+                <button class="link" onclick="pick('Library')">Library</button>
                 <button class="link" onclick="pick('Hospital')">Hospital</button>
-            </p>
+            </div>
+            <p class="hint">You can also click any zone name in the tree below to select it.</p>
         </section>
 
         <section class="panel">
-            <h2>Output</h2>
-            <pre class="out" id="out">Output appears here...</pre>
+            <h2>Result</h2>
+            <div id="msg"></div>
+            <div id="summary"></div>
+            <div id="tree" class="tree"><p class="placeholder">Loading...</p></div>
         </section>
     </div>
 </main>
 
 <script>
-    function pick(name) { document.getElementById('zone').value = name; }
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-    async function run(method, action) {
-        const name = document.getElementById('zone').value.trim();
-        const res = await fetch('/api/composite/' + action + '/' + encodeURIComponent(name), { method });
-        document.getElementById('out').textContent = await res.text();
+    function pick(name) { $('zone').value = name; }
+
+    // ---- 1. Turn the server's text report into a tree of objects ----
+    // Group line:    "    + DISTRICT: Peradeniya | 505.5 kWh | ON"
+    // Building line: "        - Library | 120.5 kWh | ON"   (4 spaces of indent per level)
+    const LINE = /^(\s*)([+-])\s+(?:([A-Z]+):\s+)?(.+?)\s+\|\s+([\d.,]+)\s+kWh\s+\|\s+(ON|OFF)\s*$/;
+
+    function parse(text) {
+        const root = { children: [] };
+        const stack = [];
+        for (const line of text.split('\n')) {
+            const m = line.match(LINE);
+            if (!m) continue;
+            const depth = m[1].length / 4;
+            const node = {
+                name: m[4],
+                level: m[2] === '-' ? 'BUILDING' : m[3],
+                kwh: parseFloat(m[5].replace(',', '.')),
+                children: []
+            };
+            stack.length = depth;
+            (depth === 0 ? root : stack[depth - 1]).children.push(node);
+            stack[depth] = node;
+            node.on = m[6] === 'ON';
+        }
+        return root.children[0] || null;
     }
+
+    // ---- 2. Work out ON / OFF / PARTIAL for every node from its buildings ----
+    function annotate(n) {
+        if (!n.children.length) {
+            n.leaves = 1; n.leavesOn = n.on ? 1 : 0;
+        } else {
+            n.leaves = 0; n.leavesOn = 0;
+            n.children.forEach(c => { annotate(c); n.leaves += c.leaves; n.leavesOn += c.leavesOn; });
+        }
+        n.state = n.leavesOn === 0 ? 'OFF' : (n.leavesOn === n.leaves ? 'ON' : 'PARTIAL');
+    }
+
+    // ---- 3. Draw it ----
+    function renderNode(n, total, target) {
+        const share = total > 0 ? Math.round(n.kwh / total * 100) : 0;
+        const isTarget = n.name.toLowerCase() === target;
+        const row = `<div class="zrow ${isTarget ? 'target' : ''} ${n.state === 'OFF' ? 'off' : ''}">` +
+            `<span class="caret ${n.children.length ? '' : 'none'}">&#9656;</span>` +
+            `<span><span class="lvl">${esc(n.level)}</span> <span class="zname" data-name="${esc(n.name)}">${esc(n.name)}</span></span>` +
+            `<span class="bar" title="${share}% of this view"><i style="width:${share}%"></i></span>` +
+            `<span class="kwh">${n.kwh.toFixed(1)} kWh</span>` +
+            `<span class="pill ${n.state}">${n.state}</span></div>`;
+        if (!n.children.length) return `<li>${row}</li>`;
+        return `<li><details open><summary>${row}</summary><ul>` +
+            n.children.map(c => renderNode(c, total, target)).join('') + `</ul></details></li>`;
+    }
+
+    function show(text, target) {
+        const root = parse(text);
+        if (!root) { $('tree').innerHTML = '<p class="placeholder">Nothing to show.</p>'; $('summary').innerHTML = ''; return; }
+        annotate(root);
+        const off = root.leaves - root.leavesOn;
+        $('summary').innerHTML = '<div class="figs" style="margin-bottom:18px">' +
+            `<div class="fig hl"><b>${root.kwh.toFixed(1)}</b><span>Total kWh (${esc(root.name)})</span></div>` +
+            `<div class="fig"><b>${root.leavesOn}</b><span>Buildings powered ON</span></div>` +
+            `<div class="fig"><b class="${off ? 'bad' : ''}">${off}</b><span>Buildings powered OFF</span></div>` +
+            '</div>';
+        $('tree').innerHTML = `<ul>${renderNode(root, root.kwh, target)}</ul>`;
+    }
+
+    function banner(cls, title, sub) {
+        $('msg').innerHTML = `<div class="banner ${cls}">${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+    }
+
+    // ---- 4. Talk to the API ----
+    async function run(method, action) {
+        const name = $('zone').value.trim();
+        if (!name) { banner('bad', 'Enter or pick a zone first'); return; }
+        const buttons = ['b-report', 'b-shutdown', 'b-restore'].map($);
+        buttons.forEach(b => b.disabled = true);
+        try {
+            const res = await fetch('/api/composite/' + action + '/' + encodeURIComponent(name), { method });
+            const text = await res.text();
+            if (!res.ok) {
+                banner('bad', 'Zone not found', '"' + name + '" does not exist. Pick a name from the tree.');
+                return;
+            }
+            if (action === 'report') {
+                banner('good', 'Usage report for ' + name, 'Showing this zone and everything inside it.');
+            } else if (action === 'shutdown') {
+                banner('warn', 'Power shut down for ' + name, 'Every building inside it is now OFF. Showing the whole city.');
+            } else {
+                banner('good', 'Power restored for ' + name, 'Every building inside it is back ON. Showing the whole city.');
+            }
+            show(text, name.toLowerCase());
+        } catch (e) {
+            banner('bad', 'Could not reach the server', e.message);
+        } finally {
+            buttons.forEach(b => b.disabled = false);
+        }
+    }
+
+    // click a zone name in the tree to select it
+    $('tree').addEventListener('click', e => {
+        const z = e.target.closest('.zname');
+        if (!z) return;
+        e.preventDefault();               // don't collapse the group when selecting
+        pick(z.dataset.name);
+        document.querySelectorAll('.zrow.target').forEach(r => r.classList.remove('target'));
+        z.closest('.zrow').classList.add('target');
+    });
+
+    // first load: whole city
+    run('GET', 'report');
 </script>
 </body>
 </html>

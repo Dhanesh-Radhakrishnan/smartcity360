@@ -5,6 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SmartCity360 - Secure Stream</title>
     <link rel="stylesheet" href="/style.css">
+    <style>
+        /* Page-only styles (shared style.css stays untouched) */
+        .layer { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; margin-bottom: 10px;
+            border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
+        .layer:hover { background: var(--tint); }
+        .layer input { width: auto; margin-top: 4px; accent-color: var(--brand); }
+        .layer strong { display: block; font-size: .95rem; color: var(--ink); }
+        .layer span { font-size: .85rem; color: var(--muted); }
+        label.layer { margin: 0 0 10px; color: var(--ink); }
+        .layer.on { border-color: var(--brand); background: var(--tint); }
+        #tokenBox[hidden] { display: none; }
+
+        .banner { padding: 12px 16px; border-radius: 3px; font-weight: 600; border: 1px solid currentColor; margin-bottom: 18px; }
+        .banner small { display: block; font-weight: 400; margin-top: 2px; color: var(--muted); }
+        .banner.good { color: var(--ok); }
+        .banner.block { color: var(--danger); }
+
+        .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 18px; }
+        .node { padding: 6px 12px; font: 600 12px var(--mono); border: 1px solid var(--line);
+            border-radius: 3px; background: var(--inset); color: var(--ink); }
+        .node.layer-node { border-color: var(--brand); color: var(--brand); }
+        .node.end { border-style: dashed; }
+        .arrow { color: var(--muted); }
+        .sub { margin: 18px 0 8px; font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+        details { margin-top: 14px; }
+        summary { cursor: pointer; font-size: .9rem; color: var(--muted); }
+        .up { color: var(--danger); } .down { color: var(--ok); }
+        .placeholder { color: var(--muted); }
+    </style>
 </head>
 <body>
 <header class="top">
@@ -24,40 +53,165 @@
 
     <div class="split">
         <section class="panel">
-            <h2>Reading</h2>
-            <label for="data">Meter reading (JSON)</label>
-            <textarea id="data" class="mono" rows="5">{"meterId":"EM-1001","kwh":482.7}</textarea>
+            <h2>Meter reading</h2>
+            <div class="fields">
+                <label>Meter ID <input id="meterId" value="EM-1001"></label>
+                <label>Energy (kWh) <input id="kwh" type="number" step="0.1" value="482.7"></label>
+                <label>Voltage (V) <input id="voltage" type="number" step="0.1" value="230.1"></label>
+                <label>Readings in packet <input id="count" type="number" min="1" max="50" value="1"></label>
+            </div>
+            <label for="ts">Timestamp</label>
+            <input id="ts" type="datetime-local">
+            <p class="hint">Send more than one reading to see compression make a real difference.</p>
 
-            <label>Layers</label>
-            <div class="checks">
-                <label class="check"><input type="checkbox" id="encrypt" checked> Encryption</label>
-                <label class="check"><input type="checkbox" id="compress" checked> Compression</label>
-                <label class="check"><input type="checkbox" id="auth" checked> Authentication</label>
+            <label style="margin-top:20px">Security layers</label>
+            <label class="layer" id="l-encrypt"><input type="checkbox" id="encrypt" checked>
+                <div><strong>Encryption</strong><span>AES-256-GCM. Nobody on the network can read the data.</span></div></label>
+            <label class="layer" id="l-compress"><input type="checkbox" id="compress" checked>
+                <div><strong>Compression</strong><span>GZIP. Makes the packet smaller.</span></div></label>
+            <label class="layer" id="l-auth"><input type="checkbox" id="auth" checked>
+                <div><strong>Authentication</strong><span>Only a meter with the right token can send.</span></div></label>
+
+            <div id="tokenBox">
+                <label for="token">Meter token</label>
+                <input id="token" class="mono" value="meter-secret-token">
+                <p class="hint">Correct token: <code>meter-secret-token</code>.
+                    <button class="link" type="button" id="wrongBtn">Use a wrong token</button> to see it blocked.</p>
             </div>
 
-            <label for="token">Meter token</label>
-            <input id="token" class="mono" value="meter-secret-token">
+            <details>
+                <summary>Show raw payload that will be sent</summary>
+                <pre class="out" id="preview" style="margin-top:8px"></pre>
+            </details>
 
-            <button class="block" onclick="send()">Send through stream</button>
+            <button class="block" id="sendBtn">Send through stream</button>
         </section>
 
         <section class="panel">
             <h2>Result</h2>
-            <pre class="out" id="out">Output appears here...</pre>
-            <p class="hint">Wrapping order: encryption (inner), compression, authentication (outer).</p>
+            <div id="result"><p class="placeholder">Choose your layers and click <b>Send through stream</b>.</p></div>
         </section>
     </div>
 </main>
 
 <script>
-    async function send() {
-        const q = new URLSearchParams({
-            encrypt: encrypt.checked, compress: compress.checked,
-            auth: auth.checked, token: token.value
-        });
-        const r = await fetch('/api/stream?' + q, { method: 'POST', body: data.value });
-        out.textContent = JSON.stringify(await r.json(), null, 2);
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    // default timestamp = now (local time, to the minute)
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    $('ts').value = now.toISOString().slice(0, 16);
+
+    // Build the reading(s) from the form fields
+    function readings() {
+        const n = Math.max(1, Math.min(50, parseInt($('count').value) || 1));
+        const base = parseFloat($('kwh').value) || 0;
+        const list = [];
+        for (let i = 0; i < n; i++) {
+            list.push({
+                meterId: $('meterId').value.trim(),
+                kwh: +(base + i * 0.1).toFixed(1),
+                voltage: parseFloat($('voltage').value) || 0,
+                ts: new Date($('ts').value || Date.now()).toISOString()
+            });
+        }
+        return list;
     }
+    const payload = () => { const r = readings(); return r.length === 1 ? r[0] : r; };
+
+    // Keep UI in sync with the form
+    function sync() {
+        for (const id of ['encrypt', 'compress', 'auth']) $('l-' + id).classList.toggle('on', $(id).checked);
+        $('tokenBox').hidden = !$('auth').checked;
+        $('preview').textContent = JSON.stringify(payload(), null, 2);
+    }
+    document.querySelectorAll('.panel input').forEach(i => i.addEventListener('input', sync));
+    $('wrongBtn').onclick = () => { $('token').value = 'wrong-token'; sync(); };
+    sync();
+
+    const node = (text, cls) => `<span class="node ${cls || ''}">${esc(text)}</span>`;
+    const arrow = '<span class="arrow">&rarr;</span>';
+
+    function flowHtml(layerNames, meterName) {
+        // write path: outermost layer first, meter last
+        const parts = ['Your reading', ...layerNames, meterName];
+        return '<div class="flow">' + parts.map((p, i) => {
+            const cls = i === 0 ? '' : (i === parts.length - 1 ? 'end' : 'layer-node');
+            return node(p, cls);
+        }).join(arrow) + '</div>';
+    }
+
+    function readingsTable(list) {
+        return '<div class="scroll"><table><tr><th>#</th><th>Meter</th><th>kWh</th><th>Voltage</th><th>Time</th></tr>' +
+            list.slice(0, 5).map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.meterId)}</td><td>${r.kwh}</td>` +
+                `<td>${r.voltage} V</td><td>${esc(new Date(r.ts).toLocaleString())}</td></tr>`).join('') +
+            '</table></div>' + (list.length > 5 ? `<p class="hint">Showing 5 of ${list.length} readings.</p>` : '');
+    }
+
+    function showSuccess(d, sent) {
+        // d.layers looks like "EnergyMeterStream[EM-1001] + Encryption(...) + Compression(...)"
+        const names = d.layers.split(' + ');
+        const meterName = names.shift().replace('EnergyMeterStream', 'Meter channel');
+        const layerNames = names.reverse();   // outermost first = the order a write passes through
+        const diff = Math.round((d.onWireBytes - d.originalBytes) / d.originalBytes * 100);
+        const diffTxt = diff === 0 ? 'no change' : (diff > 0 ? '+' + diff + '% larger' : Math.abs(diff) + '% smaller');
+
+        $('result').innerHTML =
+            `<div class="banner good">Delivered${d.roundTripOk ? ' and verified' : ''}` +
+            `<small>${d.roundTripOk ? 'The data read back from the stream matches what was sent.' : 'Warning: data read back does not match.'}</small></div>` +
+            '<p class="sub">Path through the layers</p>' + flowHtml(layerNames, meterName) +
+            '<div class="figs">' +
+            `<div class="fig"><b>${d.originalBytes}</b><span>Original bytes</span></div>` +
+            `<div class="fig hl"><b>${d.onWireBytes}</b><span>Bytes on the network</span></div>` +
+            `<div class="fig"><b class="${diff > 0 ? 'up' : 'down'}" style="font-size:1.6rem">${diffTxt}</b><span>Size change</span></div>` +
+            '</div>' +
+            `<p class="sub">Readings received (${sent.length})</p>` + readingsTable(sent) +
+            '<details><summary>What an eavesdropper sees on the wire (Base64)</summary>' +
+            `<pre class="out" style="margin-top:8px;white-space:pre-wrap;word-break:break-all">${esc(d.onWireBase64)}</pre></details>`;
+    }
+
+    function showBlocked(msg, layerNames) {
+        $('result').innerHTML =
+            `<div class="banner block">Blocked<small>${esc(msg)}</small></div>` +
+            '<p class="sub">Where it stopped</p>' + flowHtml(layerNames, 'Meter channel (never reached)') +
+            '<p class="hint">The authentication layer is the outermost one, so it rejects the request before encryption or compression even run.</p>';
+    }
+
+    $('sendBtn').addEventListener('click', async () => {
+        const btn = $('sendBtn');
+        if (!$('meterId').value.trim()) {
+            $('result').innerHTML = '<div class="banner block">Enter a meter ID first.</div>';
+            return;
+        }
+        const q = new URLSearchParams({
+            encrypt: $('encrypt').checked, compress: $('compress').checked,
+            auth: $('auth').checked, token: $('token').value
+        });
+        const sent = readings();
+        btn.disabled = true; btn.textContent = 'Sending...';
+        try {
+            const res = await fetch('/api/decorator/send?' + q, { method: 'POST', body: JSON.stringify(payload()) });
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); } catch (e) { data = null; }
+
+            if (res.ok && data) {
+                showSuccess(data, sent);
+            } else if (res.status === 401 && data) {
+                const attempted = ['auth', 'compress', 'encrypt']
+                    .filter(id => $(id).checked)
+                    .map(id => ({ auth: 'Authentication', compress: 'Compression', encrypt: 'Encryption' }[id]));
+                showBlocked(data.error, attempted);
+            } else {
+                $('result').innerHTML = `<div class="banner block">HTTP ${res.status}<small>${esc(data && data.error || text)}</small></div>`;
+            }
+        } catch (e) {
+            $('result').innerHTML = `<div class="banner block">Could not reach the server<small>${esc(e.message)}</small></div>`;
+        } finally {
+            btn.disabled = false; btn.textContent = 'Send through stream';
+        }
+    });
 </script>
 </body>
 </html>
