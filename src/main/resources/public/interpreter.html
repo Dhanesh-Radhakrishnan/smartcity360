@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SmartCity360 - Interpreter</title>
     <link rel="stylesheet" href="/style.css">
+    <style>
+        /* Page-only styles (shared style.css stays untouched) */
+        .crow { display: grid; grid-template-columns: 76px minmax(110px, 1fr) 150px minmax(110px, 1fr) 36px;
+            gap: 8px; align-items: center; margin-bottom: 10px; }
+        .crow .lead-tag { font: 700 12px var(--mono); letter-spacing: .08em; color: var(--muted); text-align: center; }
+        .crow select, .crow input { margin: 0; }
+        .crow button.x { padding: 6px 0; }
+        .preview { margin: 16px 0 0; padding: 12px 14px; background: var(--inset); border: 1px solid var(--line); border-radius: 3px; }
+        .preview .k { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+        .preview code { display: block; margin: 4px 0 10px; font-size: .9rem; word-break: break-word; }
+        .preview p { margin: 4px 0 0; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+        .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+        @media (max-width: 640px) {
+            .crow { grid-template-columns: 1fr 1fr; }
+            .crow .lead-tag { grid-column: 1 / -1; text-align: left; }
+        }
+    </style>
 </head>
 <body>
 <header class="top">
@@ -19,32 +37,52 @@
     <div class="pagehead">
         <p class="kicker">Part E &middot; Interpreter</p>
         <h1>City policy interpreter</h1>
-        <p class="lead">A rule that evaluates to <b>true</b> is a <b>violation</b>.
-            Format: <code>variable operator value</code>, joined by AND / OR.</p>
+        <p class="lead">Build a rule from simple choices. A rule that evaluates to <b>true</b> is a <b>violation</b>.
+            The page turns your choices into the rule text that the server parses.</p>
     </div>
 
     <div class="stack">
         <section class="panel">
-            <h2>Rules</h2>
+            <h2>Current rules</h2>
             <div class="scroll"><table id="rules"></table></div>
+        </section>
 
-            <h3>Add or update a rule</h3>
+        <section class="panel">
+            <h2>Rule builder</h2>
+
+            <div class="chips">
+                <span class="hint" style="margin:0">Start from:</span>
+                <button class="link" type="button" onclick="preset('night')">Night noise</button>
+                <button class="link" type="button" onclick="preset('day')">Day noise</button>
+                <button class="link" type="button" onclick="preset('parking')">Parking limit</button>
+                <button class="link" type="button" onclick="preset('blank')">Blank</button>
+            </div>
+
             <label for="rname">Rule name</label>
             <input id="rname" placeholder="e.g. NightNoise">
-            <label for="rtext">Rule text</label>
-            <input id="rtext" class="mono" placeholder="zone == HOME AND hour >= 22 AND noise_db > 60">
-            <button class="block" onclick="saveRule()">Save rule</button>
+
+            <label style="margin-top:18px">Conditions</label>
+            <div id="rows"></div>
+            <button class="ghost sm" type="button" onclick="addCond()">+ Add condition</button>
+
+            <div class="preview">
+                <span class="k">In words</span>
+                <p id="words"></p>
+                <span class="k" style="display:block;margin-top:10px">Rule text sent to the interpreter</span>
+                <code id="text"></code>
+            </div>
+            <p class="hint">AND is checked before OR, so <code>A OR B AND C</code> means A, or (B and C).</p>
+
+            <div class="btns">
+                <button type="button" id="saveBtn" onclick="saveRule()">Save rule</button>
+                <button type="button" class="ghost" onclick="preset('blank')">Clear</button>
+            </div>
             <p id="msg" class="msg"></p>
         </section>
 
         <section class="panel">
             <h2>Check an incident</h2>
-            <div class="fields">
-                <label>zone <input id="zone" value="HOME"></label>
-                <label>hour <input id="hour" type="number" value="23"></label>
-                <label>noise_db <input id="noise_db" type="number" value="65"></label>
-                <label>parked_minutes <input id="parked_minutes" type="number" value="0"></label>
-            </div>
+            <div class="fields" id="fields"></div>
             <button class="block" onclick="runCheck()">Evaluate</button>
             <div class="scroll" style="margin-top:16px"><table id="results"></table></div>
         </section>
@@ -53,21 +91,150 @@
 
 <script>
     const API = '/api/interpreter';
+    const $ = id => document.getElementById(id);
     const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     const post = (url, body) => fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
 
-    async function loadRules() {
-        const rules = await (await fetch(API + '/rules')).json();
-        document.getElementById('rules').innerHTML = '<tr><th>Name</th><th>Rule</th><th></th></tr>' +
-            rules.map(r => `<tr><td>${esc(r.name)}</td><td><code>${esc(r.text)}</code></td>
-      <td><button class="danger sm" data-n="${esc(r.name)}" onclick="del(this.dataset.n)">Delete</button></td></tr>`).join('');
+    // ---- The inputs the interpreter understands. Add a variable here to get a new input everywhere. ----
+    const VARS = {
+        zone:           { label: 'Zone',           type: 'select', options: ['HOME', 'TOWN'], def: 'HOME' },
+        hour:           { label: 'Hour (0-23)',    type: 'number', min: 0, max: 23,  def: 12 },
+        noise_db:       { label: 'Noise (dB)',     type: 'number', min: 0, max: 150, def: 60 },
+        parked_minutes: { label: 'Parked (min)',   type: 'number', min: 0, max: 1440, def: 0 }
+    };
+    const NUM_OPS = ['==', '!=', '>', '<', '>=', '<='];
+    const TXT_OPS = ['==', '!='];
+    const OP_LABEL = { '==': 'is', '!=': 'is not', '>': 'is above', '<': 'is below', '>=': 'is at least', '<=': 'is at most' };
+    const varDef = v => VARS[v] || { label: v, type: 'number', def: 0 };
+
+    const PRESETS = {
+        night:   [['', 'zone', '==', 'HOME'], ['AND', 'hour', '>=', '22'], ['AND', 'noise_db', '>', '60']],
+        day:     [['', 'zone', '==', 'HOME'], ['AND', 'noise_db', '>', '70']],
+        parking: [['', 'zone', '==', 'TOWN'], ['AND', 'parked_minutes', '>', '60']],
+        blank:   [['', 'zone', '==', 'HOME']]
+    };
+    const PRESET_NAMES = { night: 'NightNoise', day: 'DayNoise', parking: 'ParkingLimit', blank: '' };
+
+    let conds = [];   // each: { c: 'AND'|'OR', v, o, val }
+
+    function preset(key) {
+        conds = PRESETS[key].map(([c, v, o, val]) => ({ c: c || 'AND', v, o, val }));
+        $('rname').value = PRESET_NAMES[key];
+        renderRows();
     }
 
+    function addCond() {
+        conds.push({ c: 'AND', v: 'noise_db', o: '>', val: String(VARS.noise_db.def) });
+        renderRows();
+    }
+
+    function removeCond(i) {
+        if (conds.length === 1) return;
+        conds.splice(i, 1);
+        renderRows();
+    }
+
+    // ---- Draw the builder rows ----
+    function valueControl(c) {
+        const d = varDef(c.v);
+        if (d.type === 'select') {
+            return `<select data-f="val">` +
+                d.options.map(o => `<option ${o === c.val ? 'selected' : ''}>${esc(o)}</option>`).join('') + `</select>`;
+        }
+        const min = d.min !== undefined ? ` min="${d.min}"` : '';
+        const max = d.max !== undefined ? ` max="${d.max}"` : '';
+        return `<input data-f="val" type="number" step="any"${min}${max} value="${esc(c.val)}">`;
+    }
+
+    function renderRows() {
+        $('rows').innerHTML = conds.map((c, i) => {
+            const d = varDef(c.v);
+            const ops = d.type === 'select' ? TXT_OPS : NUM_OPS;
+            const names = Object.keys(VARS).includes(c.v) ? Object.keys(VARS) : [...Object.keys(VARS), c.v];
+            const lead = i === 0
+                ? '<span class="lead-tag">IF</span>'
+                : `<select data-f="c"><option ${c.c === 'AND' ? 'selected' : ''}>AND</option><option ${c.c === 'OR' ? 'selected' : ''}>OR</option></select>`;
+            return `<div class="crow" data-i="${i}">${lead}` +
+                `<select data-f="v">${names.map(n => `<option value="${esc(n)}" ${n === c.v ? 'selected' : ''}>${esc(varDef(n).label)}</option>`).join('')}</select>` +
+                `<select data-f="o">${ops.map(o => `<option value="${o}" ${o === c.o ? 'selected' : ''}>${OP_LABEL[o]} (${o})</option>`).join('')}</select>` +
+                valueControl(c) +
+                `<button type="button" class="danger sm x" data-remove="${i}" title="Remove" ${conds.length === 1 ? 'disabled' : ''}>&times;</button></div>`;
+        }).join('');
+        updatePreview();
+    }
+
+    // One listener for every row: update state, redraw only when the variable changes
+    $('rows').addEventListener('input', onEdit);
+    $('rows').addEventListener('change', onEdit);
+    $('rows').addEventListener('click', e => {
+        const b = e.target.closest('[data-remove]');
+        if (b) removeCond(Number(b.dataset.remove));
+    });
+
+    function onEdit(e) {
+        const f = e.target.dataset.f;
+        const row = e.target.closest('.crow');
+        if (!f || !row) return;
+        const c = conds[Number(row.dataset.i)];
+        c[f] = e.target.value;
+        if (f === 'v') {                       // new variable: reset operator and value to sensible defaults
+            const d = varDef(c.v);
+            c.o = d.type === 'select' ? '==' : '>';
+            c.val = String(d.type === 'select' ? d.options[0] : d.def);
+            renderRows();
+        } else {
+            updatePreview();
+        }
+    }
+
+    // ---- Build the rule text + plain English ----
+    function ruleText() {
+        return conds.map((c, i) => (i ? ` ${c.c} ` : '') + `${c.v} ${c.o} ${c.val}`).join('');
+    }
+    function ruleWords() {
+        return conds.map((c, i) => (i ? ` ${c.c.toLowerCase()} ` : '') +
+            `${varDef(c.v).label.replace(/ \(.*\)/, '').toLowerCase()} ${OP_LABEL[c.o]} ${c.val}`).join('');
+    }
+    function updatePreview() {
+        const complete = conds.every(c => String(c.val).trim() !== '');
+        $('text').textContent = ruleText();
+        $('words').textContent = 'Violation when: ' + ruleWords();
+        $('saveBtn').disabled = !complete;
+    }
+
+    // ---- Rules list ----
+    let currentRules = [];
+    async function loadRules() {
+        currentRules = await (await fetch(API + '/rules')).json();
+        $('rules').innerHTML = '<tr><th>Name</th><th>Rule</th><th></th></tr>' +
+            currentRules.map((r, i) => `<tr><td>${esc(r.name)}</td><td><code>${esc(r.text)}</code></td>
+      <td style="white-space:nowrap"><button class="ghost sm" onclick="editRule(${i})">Edit</button>
+      <button class="danger sm" data-n="${esc(r.name)}" onclick="del(this.dataset.n)">Delete</button></td></tr>`).join('');
+    }
+
+    // Load a saved rule back into the builder: "a == 1 AND b > 2" -> rows
+    function editRule(i) {
+        const r = currentRules[i];
+        const parts = r.text.trim().split(/\s+(AND|OR)\s+/i);   // [cond, AND, cond, OR, cond ...]
+        const rows = [];
+        for (let k = 0; k < parts.length; k += 2) {
+            const t = parts[k].trim().split(/\s+/);
+            if (t.length !== 3) { msg('bad', 'This rule is too custom to open in the builder.'); return; }
+            rows.push({ c: k === 0 ? 'AND' : parts[k - 1].toUpperCase(), v: t[0].toLowerCase(), o: t[1], val: t[2] });
+        }
+        conds = rows;
+        $('rname').value = r.name;
+        renderRows();
+        msg('', 'Editing "' + r.name + '". Change it and press Save rule to replace it.');
+        $('rname').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function msg(cls, text) { $('msg').className = 'msg ' + cls; $('msg').textContent = text; }
+
     async function saveRule() {
-        const res = await post(API + '/rules', { name: rname.value, text: rtext.value });
+        const res = await post(API + '/rules', { name: $('rname').value, text: ruleText() });
         const data = await res.json();
-        msg.className = 'msg ' + (res.ok ? 'ok' : 'bad');
-        msg.textContent = res.ok ? 'Rule saved.' : 'Error: ' + data.error;
+        msg(res.ok ? 'ok' : 'bad', res.ok ? 'Rule saved.' : 'Error: ' + data.error);
         if (res.ok) loadRules();
     }
 
@@ -76,15 +243,31 @@
         loadRules();
     }
 
+    // ---- Check an incident: inputs are generated from VARS ----
+    function buildFields() {
+        $('fields').innerHTML = Object.entries(VARS).map(([k, d]) => {
+            const ctl = d.type === 'select'
+                ? `<select id="f_${k}">${d.options.map(o => `<option>${esc(o)}</option>`).join('')}</select>`
+                : `<input id="f_${k}" type="number" step="any" min="${d.min ?? ''}" max="${d.max ?? ''}" value="${k === 'hour' ? 23 : k === 'noise_db' ? 65 : 0}">`;
+            return `<label>${esc(d.label)} ${ctl}</label>`;
+        }).join('');
+    }
+
     async function runCheck() {
-        const context = { zone: zone.value, hour: Number(hour.value),
-            noise_db: Number(noise_db.value), parked_minutes: Number(parked_minutes.value) };
+        const context = {};
+        for (const [k, d] of Object.entries(VARS)) {
+            const v = $('f_' + k).value;
+            context[k] = d.type === 'select' ? v : Number(v);
+        }
         const rows = await (await post(API + '/evaluate', { context })).json();
-        document.getElementById('results').innerHTML =
+        $('results').innerHTML =
             '<tr><th>Rule</th><th>Result</th></tr>' + rows.map(r =>
                 `<tr><td>${esc(r.name)}</td><td class="${r.violated || r.error ? 'bad' : 'ok'}">
      ${r.error ? esc(r.error) : r.violated ? 'VIOLATION' : 'OK'}</td></tr>`).join('');
     }
+
+    buildFields();
+    preset('night');
     loadRules();
 </script>
 </body>
